@@ -1,0 +1,7 @@
+# Build output (build.cmd and test.cmd regenerate it)
+*.exe
+src/lang.pack
+
+# Personal settings and logs written next to the exe
+*.ini
+*.log
