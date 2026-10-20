@@ -84,6 +84,11 @@ namespace MonitorConfig
         public static string MenuHelp { get { return T("MenuHelp"); } }
         public static string MenuAbout { get { return T("MenuAbout"); } }
         public static string MenuAboutTitle { get { return T("MenuAboutTitle"); } }
+        public static string MenuCheckUpdates { get { return T("MenuCheckUpdates"); } }
+        public static string UpdateAvailable(string version) { return F("UpdateAvailable", version); }
+        public static string UpdateAsk(string latest, string current) { return F("UpdateAsk", latest, current); }
+        public static string UpToDate(string version) { return F("UpToDate", version); }
+        public static string UpdateCheckFailed(string error) { return F("UpdateCheckFailed", error); }
         public static string MonitorLabel { get { return T("MonitorLabel"); } }
         public static string Redetect { get { return T("Redetect"); } }
         public static string NoDdcHelp { get { return T("NoDdcHelp"); } }
@@ -91,23 +96,24 @@ namespace MonitorConfig
         public static string ResetTitle { get { return T("ResetTitle"); } }
         public static string ResetQuestion(string what, string model) { return F("ResetQuestion", what, model); }
 
-        // Imagen
+        // Picture
         public static string TabImage { get { return T("TabImage"); } }
         public static string RgbNeedsUser { get { return T("RgbNeedsUser"); } }
         public static string SwitchToUser { get { return T("SwitchToUser"); } }
+        public static string SrgbBrightness { get { return T("SrgbBrightness"); } }
         public static string ResetLuminance { get { return T("ResetLuminance"); } }
         public static string ResetLuminanceWhat { get { return T("ResetLuminanceWhat"); } }
         public static string ResetColor { get { return T("ResetColor"); } }
         public static string ResetColorWhat { get { return T("ResetColorWhat"); } }
 
-        // Entrada y audio
+        // Input and audio
         public static string TabInput { get { return T("TabInput"); } }
         public static string NameInputs { get { return T("NameInputs"); } }
         public static string MuteSpeakers { get { return T("MuteSpeakers"); } }
         public static string ShowingInput(string input) { return F("ShowingInput", input); }
         public static string UnknownInput(uint code) { return F("UnknownInput", code.ToString("X2")); }
 
-        // Perfiles
+        // Profiles
         public static string ProfileColumn { get { return T("ProfileColumn"); } }
         public static string SettingsColumn { get { return T("SettingsColumn"); } }
         public static string Apply { get { return T("Apply"); } }
@@ -122,7 +128,7 @@ namespace MonitorConfig
         public static string ProfileApplied(string name, string model) { return F("ProfileApplied", name, model); }
         public static string ProfileIndicator(string name) { return F("ProfileIndicator", name); }
 
-        // Sistema
+        // System
         public static string TabSystem { get { return T("TabSystem"); } }
         public static string MenuLanguage { get { return T("MenuLanguage"); } }
         public static string OsdEnabled { get { return T("OsdEnabled"); } }
@@ -137,7 +143,7 @@ namespace MonitorConfig
         public static string FactoryResetHint { get { return T("FactoryResetHint"); } }
         public static string PowerOffQuestion(string model) { return F("PowerOffQuestion", model); }
 
-        // Información
+        // Information
         public static string TabInfo { get { return T("TabInfo"); } }
         public static string InfoModel { get { return T("InfoModel"); } }
         public static string InfoVendor { get { return T("InfoVendor"); } }
@@ -160,7 +166,7 @@ namespace MonitorConfig
         public static string VideoMode(int width, int height, int hz) { return F("VideoMode", width, height, hz); }
         public static string CapsSummary(bool fromCache, int codes) { return F(fromCache ? "CapsFromCache" : "CapsFromMonitor", codes); }
 
-        // Avanzado
+        // Advanced
         public static string TabAdvanced { get { return T("TabAdvanced"); } }
         public static string AdvancedWarning { get { return T("AdvancedWarning"); } }
         public static string CodeColumn { get { return T("CodeColumn"); } }
@@ -183,10 +189,13 @@ namespace MonitorConfig
         public static string SettingsTitle { get { return T("SettingsTitle"); } }
         public static string SettingsLanguage { get { return T("SettingsLanguage"); } }
         public static string LanguageAuto(string systemLanguage) { return F("LanguageAuto", systemLanguage); }
+        public static string ThemeToDark { get { return T("ThemeToDark"); } }
+        public static string ThemeToLight { get { return T("ThemeToLight"); } }
         public static string SettingsStart { get { return T("SettingsStart"); } }
         public static string SettingsAutostart { get { return T("SettingsAutostart"); } }
         public static string SettingsStartMinimized { get { return T("SettingsStartMinimized"); } }
         public static string SettingsCloseToTray { get { return T("SettingsCloseToTray"); } }
+        public static string SettingsCheckUpdates { get { return T("SettingsCheckUpdates"); } }
         public static string SettingsProfileOsd { get { return T("SettingsProfileOsd"); } }
         public static string SettingsSafety { get { return T("SettingsSafety"); } }
         public static string SettingsConfirmInput { get { return T("SettingsConfirmInput"); } }

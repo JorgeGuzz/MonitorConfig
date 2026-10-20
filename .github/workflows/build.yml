@@ -1,0 +1,39 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+
+permissions:
+  contents: write   # attaching the exe to a release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Model, services against simulated monitors, translations (no real monitor on the runner).
+      - name: Test
+        shell: cmd
+        run: test.cmd --no-ddc
+
+      # Uses the C# compiler that ships with the .NET Framework, as on any Windows PC.
+      - name: Build
+        shell: cmd
+        run: build.cmd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MonitorConfig
+          path: MonitorConfig.exe
+
+      - name: Attach the exe to the release
+        if: github.event_name == 'release'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" MonitorConfig.exe --clobber

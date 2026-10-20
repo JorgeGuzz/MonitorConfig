@@ -10,20 +10,28 @@ namespace MonitorConfig
 {
     static class Theme
     {
-        public static bool Dark
+        // Windows mode (taskbar, tray flyouts): the tray panel and the indicator follow it.
+        public static bool Dark { get { return Personalize("SystemUsesLightTheme"); } }
+
+        // App mode (windows of apps).
+        public static bool AppsDark { get { return Personalize("AppsUseLightTheme"); } }
+
+        // The windows' theme: Settings.WindowTheme ("" = like Windows apps, "light", "dark").
+        public static string WindowSetting = "";
+
+        public static bool AppDark { get { return WindowSetting == "dark" || (WindowSetting != "light" && AppsDark); } }
+
+        static bool Personalize(string lightValue)
         {
-            get
+            try
             {
-                try
+                using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
                 {
-                    using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
-                    {
-                        var v = k == null ? null : k.GetValue("SystemUsesLightTheme");
-                        return v is int && (int)v == 0;
-                    }
+                    var v = k == null ? null : k.GetValue(lightValue);
+                    return v is int && (int)v == 0;
                 }
-                catch (Exception) { return false; }
             }
+            catch (Exception) { return false; }
         }
 
         public static readonly Color Accent = Color.FromArgb(0, 120, 215);

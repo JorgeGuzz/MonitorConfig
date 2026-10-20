@@ -20,16 +20,20 @@ namespace MonitorConfig
         public readonly ProfileService Profiles;
         public readonly InputLabels Labels;
         readonly UiDispatcher dispatcher = new UiDispatcher();
+        readonly CommandServer commands;
 
         readonly NotifyIcon tray;
         readonly ContextMenuStrip menu = new ContextMenuStrip();
         readonly SynchronizationContext ui;
         readonly System.Windows.Forms.Timer redetect = new System.Windows.Forms.Timer();
         readonly System.Windows.Forms.Timer trimTimer = new System.Windows.Forms.Timer { Interval = 8000 };
+        readonly System.Windows.Forms.Timer updateTimer = new System.Windows.Forms.Timer { Interval = 15000 };
+        string balloonUrl;   // what a click on the current balloon opens
         MainForm main;
         OsdForm osd;
         Flyout flyout;
         bool dialogOpen;
+        bool builtDark = Theme.AppDark;   // the theme the open windows were built with
         Font boldMenuFont;
         public bool Exiting { get; private set; }
 
@@ -50,24 +54,33 @@ namespace MonitorConfig
                 if (osd == null || osd.IsDisposed) osd = new OsdForm();
                 osd.ShowValue(m, title, percent);
             };
-            Inputs.Notify += delegate(string text) { tray.ShowBalloonTip(6000, Strings.AppName, text, ToolTipIcon.Warning); };
+            Inputs.Notify += delegate(string text) { balloonUrl = null; tray.ShowBalloonTip(6000, Strings.AppName, text, ToolTipIcon.Warning); };
             Monitors.ValueChanged += delegate(DdcMonitor m, byte code) { if (code == Vcp.Brightness && m == Monitors.Active) UpdateTrayText(); };
             Monitors.MonitorsChanged += UpdateTrayText;
             Monitors.MonitorsChanged += ScheduleTrim;
 
             tray = new NotifyIcon { Icon = AppIcon(true), Text = Strings.AppName, ContextMenuStrip = menu, Visible = true };
             tray.MouseClick += delegate(object s, MouseEventArgs e) { if (e.Button == MouseButtons.Left) ToggleFlyout(); };
+            tray.BalloonTipClicked += delegate { if (balloonUrl != null) OpenUrl(balloonUrl); };
             menu.Opening += BuildMenu;
             menu.Closed += delegate { ScheduleTrim(); };
             trimTimer.Tick += delegate { TrimMemory(); };
             redetect.Tick += delegate { redetect.Stop(); Monitors.Detect(false); };
+            updateTimer.Tick += delegate
+            {
+                updateTimer.Stop();
+                if (Settings.CheckUpdates && Settings.LastUpdateCheck.Date < DateTime.Today) CheckForUpdates(null);
+            };
             SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            SystemEvents.UserPreferenceChanged += OnPreferenceChanged;
 
+            commands = new CommandServer(CommandServer.DefaultPipe, dispatcher.Post, a => CommandRunner.Run(a, Monitors, Profiles, Labels, Settings));
             Startup.Repair();
             if (settings.LastError != null) Monitors.Status(Strings.SettingsReadError(settings.LastError), true);
             Monitors.Detect(false);
             if (!startHidden) ShowMain();
+            updateTimer.Start();   // a little after startup, so it never competes with the first DDC reads
         }
 
         // ---------------------------------------------------------------- icon
@@ -154,7 +167,7 @@ namespace MonitorConfig
                     if (owner == null) f.StartPosition = FormStartPosition.CenterScreen;
                     if (f.ShowDialog(owner) == DialogResult.OK) SaveSettings();
                 }
-                ReloadLanguage();
+                ReloadLook();
             }
             finally { dialogOpen = false; }
         }
@@ -165,15 +178,25 @@ namespace MonitorConfig
             if (Settings.Language == setting) return;
             Settings.Language = setting;
             SaveSettings();
-            ReloadLanguage();
+            ReloadLook();
         }
 
-        // Deferred rebuild: the request may come from the main window itself (its menu or language button).
-        void ReloadLanguage()
+        // The sun button: light <-> dark. Until the first click the windows follow the Windows app mode.
+        public void ToggleTheme()
+        {
+            Settings.WindowTheme = Theme.AppDark ? "light" : "dark";
+            SaveSettings();
+            ReloadLook();
+        }
+
+        // Language and window theme from the settings. Deferred rebuild: the request may come from the main window
+        // itself (its menu or language button).
+        void ReloadLook()
         {
             string before = Lang.Current;
             Lang.Load(Settings.Language);
-            if (Lang.Current != before) ui.Post(delegate { ApplyLanguage(); }, null);
+            Theme.WindowSetting = Settings.WindowTheme;
+            if (Lang.Current != before || Theme.AppDark != builtDark) ui.Post(delegate { RebuildWindows(); }, null);
         }
 
         public Profile EditProfile(IWin32Window owner, DdcMonitor m, Profile p, Profile original)
@@ -208,9 +231,10 @@ namespace MonitorConfig
             finally { dialogOpen = false; }
         }
 
-        // Windows built in the previous language are rebuilt (the tray menu and panel are rebuilt when opened).
-        void ApplyLanguage()
+        // Windows built in the previous language or theme are rebuilt (the tray menu and panel are rebuilt when opened).
+        void RebuildWindows()
         {
+            builtDark = Theme.AppDark;
             UpdateTrayText();
             if (main != null && !main.IsDisposed && main.Visible)
             {
@@ -300,6 +324,7 @@ namespace MonitorConfig
             menu.Items.Add(new ToolStripMenuItem(Strings.RedetectMonitors, null, delegate { Monitors.Detect(true); }));
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(new ToolStripMenuItem(Strings.Exit, null, delegate { ExitApp(); }));
+            DarkMode.StyleMenu(menu, Theme.Dark);   // like the tray panel: Windows mode, not app mode
             e.Cancel = false;
         }
 
@@ -332,7 +357,7 @@ namespace MonitorConfig
             }
         }
 
-        // "Brillo (45 %)" with 0..100 % steps.
+        // "Brightness (45 %)" with 0..100 % steps.
         ToolStripMenuItem LevelMenu(DdcMonitor m, byte code, string name)
         {
             VcpValue v;
@@ -353,10 +378,57 @@ namespace MonitorConfig
             Monitors.Ui(delegate { redetect.Stop(); redetect.Interval = 2000; redetect.Start(); });
         }
 
+        // Windows switched between light and dark mode (the main window follows it when set to automatic).
+        void OnPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+        {
+            if (e.Category == UserPreferenceCategory.General)
+                Monitors.Ui(delegate { if (!Exiting && Theme.AppDark != builtDark) RebuildWindows(); });
+        }
+
         void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
             if (e.Mode == PowerModes.Resume)
                 Monitors.Ui(delegate { redetect.Stop(); redetect.Interval = 4000; redetect.Start(); });
+        }
+
+        // ---------------------------------------------------------------- updates
+
+        // owner == null: the daily automatic check, silent unless there is a version not announced yet.
+        // Otherwise the menu item, which always answers.
+        public void CheckForUpdates(IWin32Window owner)
+        {
+            UpdateChecker.CheckAsync(dispatcher.Post, delegate(UpdateChecker.Release latest, Exception error)
+            {
+                if (Exiting) return;
+                if (owner == null)
+                {
+                    if (error != null) return;   // offline or GitHub unreachable: try again on the next start
+                    Settings.LastUpdateCheck = DateTime.Today;
+                    if (UpdateChecker.IsNewer(latest) && Settings.UpdateNotified != latest.Tag)
+                    {
+                        Settings.UpdateNotified = latest.Tag;
+                        balloonUrl = latest.Url;
+                        tray.ShowBalloonTip(10000, Strings.AppName, Strings.UpdateAvailable(latest.Version.ToString()), ToolTipIcon.Info);
+                    }
+                    SaveSettings();
+                    return;
+                }
+                var form = owner as Form;
+                if (form != null && form.IsDisposed) owner = null;
+                if (error != null)
+                    MessageBox.Show(owner, Strings.UpdateCheckFailed(error.Message), Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                else if (!UpdateChecker.IsNewer(latest))
+                    MessageBox.Show(owner, Strings.UpToDate(UpdateChecker.Current.ToString()), Strings.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                else if (MessageBox.Show(owner, Strings.UpdateAsk(latest.Version.ToString(), UpdateChecker.Current.ToString()), Strings.AppName,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+                    OpenUrl(latest.Url);
+            });
+        }
+
+        static void OpenUrl(string url)
+        {
+            try { System.Diagnostics.Process.Start(url); }
+            catch (Exception ex) { Crash.Log(ex); }
         }
 
         // ---------------------------------------------------------------- exit
@@ -373,14 +445,17 @@ namespace MonitorConfig
         {
             SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            SystemEvents.UserPreferenceChanged -= OnPreferenceChanged;
             redetect.Stop();
             trimTimer.Stop();
+            updateTimer.Stop();
             Settings.Save();
             if (main != null && !main.IsDisposed) main.Dispose();
             if (flyout != null && !flyout.IsDisposed) flyout.Dispose();
             if (osd != null && !osd.IsDisposed) osd.Dispose();
             tray.Visible = false;
             tray.Dispose();
+            commands.Dispose();
             Saver.Dispose();      // first: pending saves are queued before the monitors close
             Inputs.Dispose();
             Monitors.Dispose();   // closes the monitors and finishes the DDC queue

@@ -12,10 +12,11 @@ namespace MonitorConfig
         readonly TrayApp app;
         readonly MonitorService monitors;
         readonly ComboBox monitorBox = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Anchor = AnchorStyles.Left | AnchorStyles.Right };
-        readonly TabControl tabs = new TabControl { Dock = DockStyle.Fill };
+        readonly TabControl tabs = new ThemedTabControl { Dock = DockStyle.Fill };
         readonly ToolStripStatusLabel statusLabel = new ToolStripStatusLabel { Spring = true, TextAlign = ContentAlignment.MiddleLeft };
         readonly ToolStripStatusLabel modeLabel = new ToolStripStatusLabel();
         readonly ToolStripDropDownButton languageButton = new ToolStripDropDownButton { ImageScaling = ToolStripItemImageScaling.None };
+        readonly ToolStripButton themeButton = new ToolStripButton { DisplayStyle = ToolStripItemDisplayStyle.Image, ImageScaling = ToolStripItemImageScaling.None };
         readonly List<MonitorTab> pages = new List<MonitorTab>();
         readonly InputTab inputTab;
         Label noDdcLabel;
@@ -43,6 +44,7 @@ namespace MonitorConfig
             var status = new StatusStrip { ShowItemToolTips = true };
             status.Items.Add(statusLabel);
             status.Items.Add(modeLabel);
+            status.Items.Add(BuildThemeButton());
             status.Items.Add(BuildLanguageButton());
 
             Controls.Add(tabs);
@@ -56,6 +58,7 @@ namespace MonitorConfig
             monitors.StatusChanged += OnStatus;
             OnMonitorsChanged();
             OnStatus(monitors.Detecting ? Strings.Searching : Strings.Ready, false);
+            DarkMode.Apply(this);   // also to what the tabs add later
             Lay.ResumeTree(this);   // everything was built with layout suspended: one layout pass
             PerformLayout();
         }
@@ -83,6 +86,7 @@ namespace MonitorConfig
             var options = new ToolStripMenuItem(Strings.MenuOptions);
             options.DropDownItems.Add(new ToolStripMenuItem(Strings.MenuSettings, null, delegate { app.ShowSettings(this); }));
             var help = new ToolStripMenuItem(Strings.MenuHelp);
+            help.DropDownItems.Add(new ToolStripMenuItem(Strings.MenuCheckUpdates, null, delegate { app.CheckForUpdates(this); }));
             help.DropDownItems.Add(new ToolStripMenuItem(Strings.MenuAbout, null, delegate { ShowAbout(); }));
             menu.Items.Add(file);
             menu.Items.Add(options);
@@ -115,6 +119,16 @@ namespace MonitorConfig
                 monitors.SetActive(monitors.All[monitorBox.SelectedIndex]);
             };
             return t;
+        }
+
+        // Bottom right, next to the language: the sun switches between light and dark (the window is rebuilt).
+        ToolStripItem BuildThemeButton()
+        {
+            bool dark = DarkMode.On;
+            themeButton.Image = DarkMode.Sun(dark, Dpi.S(16));
+            themeButton.ToolTipText = dark ? Strings.ThemeToLight : Strings.ThemeToDark;
+            themeButton.Click += delegate { app.ToggleTheme(); };
+            return themeButton;
         }
 
         // Bottom right: the flag and name of the language in use; the list applies the choice at once.
@@ -180,7 +194,7 @@ namespace MonitorConfig
         void OnStatus(string text, bool error)
         {
             statusLabel.Text = text;
-            statusLabel.ForeColor = error ? Color.Firebrick : SystemColors.ControlText;
+            statusLabel.ForeColor = error ? DarkMode.ErrorColor : DarkMode.TextColor;
             if (!error && M != null) noDdcLabel.Visible = !M.Responsive && !monitors.Detecting;
         }
 
@@ -210,6 +224,12 @@ namespace MonitorConfig
             if (WindowState != FormWindowState.Normal || !Visible) return;
             app.Settings.WindowX = Location.X;
             app.Settings.WindowY = Location.Y;
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            DarkMode.TitleBar(this);
         }
 
         protected override void OnShown(EventArgs e)

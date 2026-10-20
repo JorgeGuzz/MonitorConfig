@@ -13,6 +13,11 @@ namespace MonitorConfig
         [DllImport("user32.dll")]
         public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr clip, MonitorEnumProc proc, IntPtr data);
 
+        public const int ATTACH_PARENT_PROCESS = -1;
+
+        [DllImport("kernel32.dll")]
+        public static extern bool AttachConsole(int processId);
+
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct MONITORINFOEX
         {

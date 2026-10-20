@@ -45,8 +45,15 @@ namespace MonitorConfig
 
         protected void Finish()
         {
+            DarkMode.Apply(this);
             ResumeLayout(false);
             PerformLayout();
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            DarkMode.TitleBar(this);
         }
 
         protected abstract bool Commit();
@@ -94,7 +101,7 @@ namespace MonitorConfig
     class SettingsForm : DialogBase
     {
         readonly Settings s;
-        readonly CheckBox startup, startMin, closeTray, osd, confirmInput, keepInput;
+        readonly CheckBox startup, startMin, closeTray, updates, osd, confirmInput, keepInput;
         readonly ComboBox language;
 
         public SettingsForm(Settings settings) : base(Strings.SettingsTitle)
@@ -115,6 +122,7 @@ namespace MonitorConfig
             startup = Check(Strings.SettingsAutostart, Startup.IsEnabled);
             startMin = Check(Strings.SettingsStartMinimized, s.StartMinimized);
             closeTray = Check(Strings.SettingsCloseToTray, s.CloseToTray);
+            updates = Check(Strings.SettingsCheckUpdates, s.CheckUpdates);
 
             Header(Strings.Profiles);
             osd = Check(Strings.SettingsProfileOsd, s.ShowOsd);
@@ -140,6 +148,7 @@ namespace MonitorConfig
             if (startup.Checked != Startup.IsEnabled && !Startup.Set(startup.Checked)) Tell(Strings.AutostartFailed);
             s.StartMinimized = startMin.Checked;
             s.CloseToTray = closeTray.Checked;
+            s.CheckUpdates = updates.Checked;
             s.ShowOsd = osd.Checked;
             s.ConfirmInput = confirmInput.Checked;
             s.KeepInput = keepInput.Checked;

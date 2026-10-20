@@ -13,6 +13,8 @@ namespace MonitorConfig
         class Row
         {
             public DdcMonitor M;
+            public Label Title;
+            public bool Marked;   // the monitor the main window shows, when there are several
             public TrackBar Bright, Volume;
             public Label BrightValue, VolumeValue;
             public Button Mute;
@@ -24,6 +26,7 @@ namespace MonitorConfig
         readonly MonitorService monitors;
         readonly TableLayoutPanel table = new TableLayoutPanel { AutoSize = true, ColumnCount = 4, Dock = DockStyle.Fill };
         readonly List<Row> rows = new List<Row>();
+        readonly ToolTip tips = new ToolTip();
         bool updating;
         Color back, fore, dim;
         string builtFor;
@@ -62,6 +65,7 @@ namespace MonitorConfig
         protected override void Dispose(bool disposing)
         {
             monitors.ValueChanged -= OnValueChanged;
+            if (disposing) tips.Dispose();
             base.Dispose(disposing);
         }
 
@@ -89,9 +93,10 @@ namespace MonitorConfig
             foreach (var m in responsive)
             {
                 if (rows.Count > 0) Wide(new Label { AutoSize = false, Height = 1, BackColor = Color.FromArgb(dark ? 70 : 210, dark ? 70 : 210, dark ? 70 : 210), Anchor = AnchorStyles.Left | AnchorStyles.Right, Margin = Dpi.Pad(3, 8, 3, 4) });
-                var r = new Row { M = m };
+                var r = new Row { M = m, Marked = m == monitors.Active && responsive.Count > 1 };
                 rows.Add(r);
-                Wide(new Label { Text = m.Model + (m == monitors.Active && responsive.Count > 1 ? "  ●" : ""), AutoSize = true, UseMnemonic = false, Font = Fonts.Bold, Margin = Dpi.Pad(3, 6, 3, 2) });
+                r.Title = new Label { AutoSize = true, UseMnemonic = false, Font = Fonts.Bold, Margin = Dpi.Pad(3, 6, 3, 2) };
+                Wide(r.Title);
                 if (m.Supports(Vcp.Brightness)) r.Bright = Slider(r, Strings.Brightness, Vcp.Brightness, out r.BrightValue);
                 if (m.Supports(Vcp.Volume))
                 {
@@ -236,6 +241,10 @@ namespace MonitorConfig
         void UpdateRow(Row r)
         {
             var m = r.M;
+            bool srgb = m.InSrgb && r.Bright != null;
+            r.Title.Text = m.Model + (srgb ? " · sRGB" : "") + (r.Marked ? "  ●" : "");
+            tips.SetToolTip(r.Title, srgb ? Strings.SrgbBrightness : null);
+            if (r.Bright != null) tips.SetToolTip(r.Bright, srgb ? Strings.SrgbBrightness : null);
             SetBar(m, Vcp.Brightness, r.Bright, r.BrightValue);
             SetBar(m, Vcp.Volume, r.Volume, r.VolumeValue);
             VcpValue v;
@@ -267,7 +276,7 @@ namespace MonitorConfig
             var sb = new StringBuilder(Theme.Dark ? "d" : "l").Append(Lang.Current).Append(monitors.Detecting);
             foreach (var m in monitors.All.Where(x => x.Responsive))
             {
-                sb.Append('|').Append(m.Id).Append(m == monitors.Active ? "*" : "");
+                sb.Append('|').Append(m.Id).Append(m == monitors.Active ? "*" : "").Append(m.InSrgb ? "s" : "");   // wider title
                 foreach (var c in MonitorService.QuickCodes) sb.Append(m.Supports(c) ? '1' : '0');
                 foreach (var o in m.InputOptions) sb.Append(o.ToString("X2")).Append(app.Labels.Label(m, o));
             }

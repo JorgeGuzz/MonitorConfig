@@ -8,8 +8,8 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("MonitorConfig")]
 [assembly: AssemblyDescription("DDC/CI monitor control")]
 [assembly: AssemblyProduct("MonitorConfig")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace MonitorConfig
 {
@@ -18,8 +18,9 @@ namespace MonitorConfig
         const string MutexName = @"Local\MonitorConfig.Instance";
 
         [STAThread]
-        static void Main(string[] args)
+        static int Main(string[] args)
         {
+            if (CommandRunner.IsCommand(args)) return CommandLine.Run(args, MutexName);
             bool created;
             using (var mutex = new Mutex(true, MutexName, out created))
             using (var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\MonitorConfig.Show"))
@@ -31,9 +32,9 @@ namespace MonitorConfig
                     // Already running: bring its window up, or ask it to quit (--exit, used by build.cmd).
                     (exit ? exitEvent : showEvent).Set();
                     if (exit) WaitUntilClosed(mutex);
-                    return;
+                    return 0;
                 }
-                if (exit) return;
+                if (exit) return 0;
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Crash.Install();
@@ -47,6 +48,7 @@ namespace MonitorConfig
                 var settings = Settings.Load(iniPath);
                 Crash.Folder = Path.GetDirectoryName(settings.Path);   // the log sits next to the settings
                 Lang.Load(settings.Language);
+                Theme.WindowSetting = settings.WindowTheme;
                 var app = new TrayApp(settings, hidden || settings.StartMinimized);
                 ThreadPool.RegisterWaitForSingleObject(showEvent, delegate { app.Monitors.Ui(app.ShowMain); }, null, -1, false);
                 ThreadPool.RegisterWaitForSingleObject(exitEvent, delegate { app.Monitors.Ui(app.ExitApp); }, null, -1, true);
@@ -56,6 +58,7 @@ namespace MonitorConfig
                 Application.Run(app);
                 mutex.ReleaseMutex();
             }
+            return 0;
         }
 
         // The running copy holds the mutex until it has shut down (max. 5 s).

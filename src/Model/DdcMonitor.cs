@@ -108,6 +108,17 @@ namespace MonitorConfig
         // Changes made over DDC/CI only live in the monitor's RAM until it is told to store them (MCCS command 0x0C).
         public bool CanSave { get { return Caps != null && Caps.Commands.Contains(0x0C); } }
 
+        // sRGB presets usually fix the luminance and ignore the brightness setting, which still reads back its old value
+        // (the XG2705 says 100 while much dimmer; writing 99 over DDC/CI then overrides the calibration).
+        public bool InSrgb
+        {
+            get
+            {
+                VcpValue p;
+                return Values.TryGetValue(Vcp.ColorPreset, out p) && p.Current == Vcp.PresetSrgb;
+            }
+        }
+
         // ---------------------------------------------------------------- inputs
 
         // Monitor input codes that match a cable type. DDC/CI cannot tell what is plugged into each input,

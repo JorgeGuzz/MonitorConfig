@@ -1,6 +1,6 @@
 @echo off
-rem Compila MonitorConfig.exe (uso diario) y tools\MonitorConfig.dev.exe (con las herramientas de prueba --shots/--bench)
-rem con el compilador de C# que trae Windows (.NET Framework 4.x). No necesita instalar nada.
+rem Builds MonitorConfig.exe (the app) and tools\MonitorConfig.dev.exe (with the --shots/--bench developer tools)
+rem using the C# compiler that ships with Windows (.NET Framework 4.x). Nothing to install.
 setlocal
 cd /d "%~dp0"
 set "CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
@@ -14,26 +14,26 @@ if not exist "src\app.ico" (
   if errorlevel 1 exit /b 1
 )
 
-rem Textos: comprueba que todos los idiomas esten completos y los empaqueta comprimidos.
+rem Texts: checks that every language is complete and packs them compressed.
 "%CSC%" /nologo /out:tools\PackLang.exe tools\PackLang.cs
 if errorlevel 1 goto failed
 tools\PackLang.exe src\Lang src\lang.pack
 if errorlevel 1 (
-  echo Faltan o sobran textos en src\Lang ^(ver arriba^).
+  echo Missing or extra texts in src\Lang ^(see above^).
   exit /b 1
 )
 
-rem Cierra la copia abierta (si la hay) para poder sobrescribir el .exe.
+rem Closes the running copy (if any) so the .exe can be overwritten.
 if exist MonitorConfig.exe .\MonitorConfig.exe --exit
 
 "%CSC%" %COMMON% /out:MonitorConfig.exe /recurse:src\*.cs
 if errorlevel 1 goto failed
 "%CSC%" %COMMON% /define:DEVTOOLS /out:tools\MonitorConfig.dev.exe /recurse:src\*.cs
 if errorlevel 1 goto failed
-echo Listo: %~dp0MonitorConfig.exe
+echo Done: %~dp0MonitorConfig.exe
 exit /b 0
 
 :failed
 echo.
-echo Error al compilar. Si MonitorConfig.exe esta abierto, cierralo desde la bandeja y vuelve a intentarlo.
+echo Build failed. If MonitorConfig.exe is running, exit it from the tray and try again.
 exit /b 1

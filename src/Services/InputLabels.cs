@@ -1,6 +1,6 @@
 namespace MonitorConfig
 {
-    // What is shown under each input: the user's name for it, or «Este PC» for the input this PC is plugged into.
+    // What is shown under each input: the user's name for it, or "This PC" for the input this PC is plugged into.
     class InputLabels
     {
         readonly Settings settings;

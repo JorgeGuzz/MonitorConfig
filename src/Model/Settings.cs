@@ -8,8 +8,9 @@ using System.Windows.Forms;
 
 namespace MonitorConfig
 {
-    // Portable settings: an INI next to the exe (falls back to %APPDATA% if that folder is read-only).
-    // The key names are part of the file format and stay in Spanish.
+    // Settings live in %APPDATA%\MonitorConfig, so the exe can sit anywhere (the desktop) without a file next to it.
+    // Portable mode: a MonitorConfig.ini next to the exe is used instead (a USB stick that carries its settings).
+    // Section and key names are English since 1.1; the Spanish ones written by 1.0 are still read.
     class Settings
     {
         public const string FileName = "MonitorConfig.ini";
@@ -19,7 +20,11 @@ namespace MonitorConfig
         public bool ShowOsd = true;
         public bool ConfirmInput = true;
         public bool KeepInput = true;
+        public bool CheckUpdates = true;
+        public DateTime LastUpdateCheck = DateTime.MinValue;
+        public string UpdateNotified = "";   // the newest version already announced (announced once)
         public string Language = "";   // "" = the Windows display language
+        public string WindowTheme = "";   // "" = like Windows apps, "light", "dark"
         public string ActiveMonitor = "";
         public int WindowX = int.MinValue, WindowY = int.MinValue;
         public readonly List<Profile> Profiles = new List<Profile>();
@@ -34,14 +39,16 @@ namespace MonitorConfig
             get { return System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MonitorConfig", FileName); }
         }
 
-        // path: a specific file (developer tools); null = the portable location.
+        // The file next to the exe if there is one (portable mode); otherwise the one in the user's profile.
+        public static string Locate(string besideExe, string inProfile)
+        {
+            return File.Exists(besideExe) ? besideExe : inProfile;
+        }
+
+        // path: a specific file (developer tools); null = the usual place.
         public static Settings Load(string path = null)
         {
-            if (path == null)
-            {
-                string local = System.IO.Path.Combine(ExeDir, FileName);
-                path = File.Exists(local) ? local : (File.Exists(AppDataPath) ? AppDataPath : local);
-            }
+            if (path == null) path = Locate(System.IO.Path.Combine(ExeDir, FileName), AppDataPath);
             var s = new Settings { Path = path };
             if (File.Exists(path))
             {
@@ -65,14 +72,15 @@ namespace MonitorConfig
                     section = line.Substring(1, line.Length - 2);
                     profile = null;
                     inputs = null;
-                    if (section.StartsWith("Entradas:", StringComparison.OrdinalIgnoreCase))
+                    string rest;
+                    if (Prefixed(section, out rest, "Inputs:", "Entradas:"))
                     {
                         inputs = new Dictionary<byte, string>();
-                        InputNames[section.Substring(9)] = inputs;
+                        InputNames[rest] = inputs;
                     }
-                    if (section.StartsWith("Perfil:", StringComparison.OrdinalIgnoreCase))
+                    else if (Prefixed(section, out rest, "Profile:", "Perfil:"))
                     {
-                        profile = new Profile { Name = section.Substring(7) };
+                        profile = new Profile { Name = rest };
                         Profiles.Add(profile);
                     }
                     continue;
@@ -94,7 +102,7 @@ namespace MonitorConfig
                     else if (TryCode(key, out code) && uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out v))
                         profile.Values[(byte)code] = v;
                 }
-                else if (section.StartsWith("Capacidades", StringComparison.OrdinalIgnoreCase))
+                else if (section.Equals("Capabilities", StringComparison.OrdinalIgnoreCase) || section.Equals("Capacidades", StringComparison.OrdinalIgnoreCase))
                 {
                     CapsCache[key] = value;
                 }
@@ -102,18 +110,37 @@ namespace MonitorConfig
                 {
                     switch (key)
                     {
-                        case "IniciarMinimizado": StartMinimized = value == "1"; break;
-                        case "CerrarALaBandeja": CloseToTray = value == "1"; break;
-                        case "IndicadorEnPantalla": ShowOsd = value == "1"; break;
-                        case "ConfirmarEntrada": ConfirmInput = value == "1"; break;
-                        case "MantenerEntrada": KeepInput = value == "1"; break;
+                        case "StartMinimized": case "IniciarMinimizado": StartMinimized = value == "1"; break;
+                        case "CloseToTray": case "CerrarALaBandeja": CloseToTray = value == "1"; break;
+                        case "ShowOsd": case "IndicadorEnPantalla": ShowOsd = value == "1"; break;
+                        case "ConfirmInput": case "ConfirmarEntrada": ConfirmInput = value == "1"; break;
+                        case "KeepInput": case "MantenerEntrada": KeepInput = value == "1"; break;
+                        case "CheckUpdates": CheckUpdates = value == "1"; break;
+                        case "LastUpdateCheck":
+                            DateTime d;
+                            if (DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out d)) LastUpdateCheck = d;
+                            break;
+                        case "UpdateNotified": UpdateNotified = value; break;
                         case "Monitor": ActiveMonitor = value; break;
-                        case "Idioma": Language = value; break;
-                        case "VentanaX": WindowX = ParseInt(value, int.MinValue); break;
-                        case "VentanaY": WindowY = ParseInt(value, int.MinValue); break;
+                        case "Language": case "Idioma": Language = value; break;
+                        case "WindowTheme": WindowTheme = value == "light" || value == "dark" ? value : ""; break;
+                        case "WindowX": case "VentanaX": WindowX = ParseInt(value, int.MinValue); break;
+                        case "WindowY": case "VentanaY": WindowY = ParseInt(value, int.MinValue); break;
                     }
                 }
             }
+        }
+
+        static bool Prefixed(string section, out string rest, params string[] prefixes)
+        {
+            foreach (var prefix in prefixes)
+                if (section.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    rest = section.Substring(prefix.Length);
+                    return true;
+                }
+            rest = null;
+            return false;
         }
 
         static bool TryCode(string key, out int code)
@@ -132,30 +159,34 @@ namespace MonitorConfig
             var sb = new StringBuilder();
             sb.Append("; MonitorConfig\r\n");
             sb.Append("[General]\r\n");
-            Line(sb, "IniciarMinimizado", StartMinimized ? "1" : "0");
-            Line(sb, "CerrarALaBandeja", CloseToTray ? "1" : "0");
-            Line(sb, "IndicadorEnPantalla", ShowOsd ? "1" : "0");
-            Line(sb, "ConfirmarEntrada", ConfirmInput ? "1" : "0");
-            Line(sb, "MantenerEntrada", KeepInput ? "1" : "0");
+            Line(sb, "StartMinimized", StartMinimized ? "1" : "0");
+            Line(sb, "CloseToTray", CloseToTray ? "1" : "0");
+            Line(sb, "ShowOsd", ShowOsd ? "1" : "0");
+            Line(sb, "ConfirmInput", ConfirmInput ? "1" : "0");
+            Line(sb, "KeepInput", KeepInput ? "1" : "0");
+            Line(sb, "CheckUpdates", CheckUpdates ? "1" : "0");
+            if (LastUpdateCheck != DateTime.MinValue) Line(sb, "LastUpdateCheck", LastUpdateCheck.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            if (UpdateNotified.Length > 0) Line(sb, "UpdateNotified", UpdateNotified);
             Line(sb, "Monitor", ActiveMonitor);
-            Line(sb, "Idioma", Language);
-            if (WindowX != int.MinValue) Line(sb, "VentanaX", WindowX.ToString(CultureInfo.InvariantCulture));
-            if (WindowY != int.MinValue) Line(sb, "VentanaY", WindowY.ToString(CultureInfo.InvariantCulture));
+            Line(sb, "Language", Language);
+            Line(sb, "WindowTheme", WindowTheme);
+            if (WindowX != int.MinValue) Line(sb, "WindowX", WindowX.ToString(CultureInfo.InvariantCulture));
+            if (WindowY != int.MinValue) Line(sb, "WindowY", WindowY.ToString(CultureInfo.InvariantCulture));
             foreach (var p in Profiles)
             {
-                sb.Append("\r\n[Perfil:").Append(p.Name).Append("]\r\n");
+                sb.Append("\r\n[Profile:").Append(p.Name).Append("]\r\n");
                 Line(sb, "Monitor", p.Monitor);
                 foreach (var kv in p.Values) Line(sb, kv.Key.ToString("X2"), kv.Value.ToString(CultureInfo.InvariantCulture));
             }
             foreach (var kv in InputNames)
             {
                 if (kv.Value.Count == 0) continue;
-                sb.Append("\r\n[Entradas:").Append(kv.Key).Append("]\r\n");
+                sb.Append("\r\n[Inputs:").Append(kv.Key).Append("]\r\n");
                 foreach (var name in kv.Value.OrderBy(x => x.Key)) Line(sb, name.Key.ToString("X2"), name.Value);
             }
             if (CapsCache.Count > 0)
             {
-                sb.Append("\r\n[Capacidades]\r\n");
+                sb.Append("\r\n[Capabilities]\r\n");
                 foreach (var kv in CapsCache) Line(sb, kv.Key, kv.Value);
             }
             return sb.ToString();
@@ -224,7 +255,7 @@ namespace MonitorConfig
             return InputNames.TryGetValue(monitor, out names) && names.TryGetValue(code, out name) ? name : null;
         }
 
-        // Profile names end up inside "[Perfil:...]": keep them on one line and without brackets.
+        // Profile names end up inside "[Profile:...]": keep them on one line and without brackets.
         public static string CleanProfileName(string name)
         {
             var sb = new StringBuilder();

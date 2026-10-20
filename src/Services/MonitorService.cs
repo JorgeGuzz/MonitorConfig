@@ -40,7 +40,7 @@ namespace MonitorConfig
         };
 
         // What the tray panel and menu show for every monitor.
-        public static readonly byte[] QuickCodes = { Vcp.Brightness, Vcp.Volume, Vcp.Mute, Vcp.Input };
+        public static readonly byte[] QuickCodes = { Vcp.Brightness, Vcp.ColorPreset, Vcp.Volume, Vcp.Mute, Vcp.Input };
 
         public MonitorService(Settings settings, IMonitorBus bus, DdcQueue queue, Action<Action> ui, Func<DateTime> clock)
         {
@@ -214,6 +214,7 @@ namespace MonitorConfig
             switch (code)
             {
                 case Vcp.ColorPreset: return new[] { Vcp.RedGain, Vcp.GreenGain, Vcp.BlueGain, Vcp.Brightness, Vcp.Contrast, Vcp.ColorTemp };
+                case Vcp.Brightness: return new[] { Vcp.ColorPreset };   // some monitors leave sRGB when the brightness changes
                 case Vcp.ResetLuminance: return new[] { Vcp.Brightness, Vcp.Contrast };
                 case Vcp.ResetColor: return new[] { Vcp.ColorPreset, Vcp.RedGain, Vcp.GreenGain, Vcp.BlueGain, Vcp.ColorTemp };
                 case Vcp.FactoryReset: return MainCodes;

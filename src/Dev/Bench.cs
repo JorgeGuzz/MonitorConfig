@@ -56,67 +56,67 @@ namespace MonitorConfig
             {
                 sb.AppendLine("MonitorConfig " + Application.ProductVersion + " · .NET " + Environment.Version + " · " + (Environment.Is64BitProcess ? "64" : "32")
                     + " bits · exe " + (new FileInfo(Application.ExecutablePath).Length / 1024) + " KB");
-                sb.AppendLine("Arranque hasta la bandeja: " + (DateTime.Now - p.StartTime).TotalMilliseconds.ToString("0") + " ms");
+                sb.AppendLine("Start until the tray: " + (DateTime.Now - p.StartTime).TotalMilliseconds.ToString("0") + " ms");
                 await Until(() => !Monitors.Detecting && Monitors.All.Count > 0, 20000);
-                sb.AppendLine("Arranque hasta detectar monitores: " + (DateTime.Now - p.StartTime).TotalMilliseconds.ToString("0") + " ms");
+                sb.AppendLine("Start until monitors detected: " + (DateTime.Now - p.StartTime).TotalMilliseconds.ToString("0") + " ms");
                 await Until(() => Monitors.DdcIdle, 30000);
-                sb.AppendLine("Arranque hasta terminar el DDC/CI: " + (DateTime.Now - p.StartTime).TotalMilliseconds.ToString("0") + " ms");
+                sb.AppendLine("Start until DDC/CI finished: " + (DateTime.Now - p.StartTime).TotalMilliseconds.ToString("0") + " ms");
                 sb.AppendLine();
-                sb.AppendLine(string.Format("{0,-44}{1,7}{2,8}{3,7}{4,8}{5,6}{6,6}{7,6}{8,9}{9,7}", "Escenario", "WS MB", "Priv MB", "GC MB", "Handles", "GDI", "USER", "Hilos", "CPU ms", "DDC"));
-                Row(sb, p, "Arranque (en la bandeja)", false);
-                Row(sb, p, "  idem tras recolectar basura", true);
+                sb.AppendLine(string.Format("{0,-44}{1,7}{2,8}{3,7}{4,8}{5,6}{6,6}{7,6}{8,9}{9,7}", "Scenario", "WS MB", "Priv MB", "GC MB", "Handles", "GDI", "USER", "Threads", "CPU ms", "DDC"));
+                Row(sb, p, "Started (in the tray)", false);
+                Row(sb, p, "  same after garbage collection", true);
                 await Task.Delay(20000);
-                Row(sb, p, "20 s en reposo", false);
+                Row(sb, p, "20 s idle", false);
 
                 ShowMain();
                 double t = await Until(() => Monitors.DdcIdle, 30000);
-                Row(sb, p, "Ventana principal abierta (" + t.ToString("0") + " ms DDC)", false);
+                Row(sb, p, "Main window open (" + t.ToString("0") + " ms DDC)", false);
                 if (main != null) main.HideToTray();
                 await Task.Delay(300);
-                Row(sb, p, "Ventana cerrada a la bandeja", true);
+                Row(sb, p, "Window closed to the tray", true);
                 await Task.Delay(10000);
-                Row(sb, p, "  10 s después (memoria devuelta)", false);
+                Row(sb, p, "  10 s later (memory returned)", false);
                 for (int i = 0; i < 20; i++) { ShowMain(); await Task.Delay(120); if (main != null) main.HideToTray(); await Task.Delay(60); }
                 t = await Until(() => Monitors.DdcIdle, 60000);
-                Row(sb, p, "20 aperturas de la ventana (" + t.ToString("0") + " ms DDC)", true);
+                Row(sb, p, "20 window openings (" + t.ToString("0") + " ms DDC)", true);
 
                 if (flyout == null || flyout.IsDisposed) flyout = new Flyout(this);
                 for (int i = 0; i < 30; i++) { flyout.ShowNearTray(); await Task.Delay(80); flyout.Hide(); await Task.Delay(40); }
                 t = await Until(() => Monitors.DdcIdle, 120000);
-                Row(sb, p, "30 aperturas del panel (" + t.ToString("0") + " ms DDC)", true);
+                Row(sb, p, "30 tray panel openings (" + t.ToString("0") + " ms DDC)", true);
 
                 for (int i = 0; i < 50; i++) BuildMenu(menu, new CancelEventArgs());
                 t = await Until(() => Monitors.DdcIdle, 120000);
-                Row(sb, p, "50 aperturas del menú (" + t.ToString("0") + " ms DDC)", true);
+                Row(sb, p, "50 tray menu openings (" + t.ToString("0") + " ms DDC)", true);
 
                 if (Monitors.Active != null)
                 {
                     if (osd == null || osd.IsDisposed) osd = new OsdForm();
-                    for (int i = 0; i < 30; i++) { osd.ShowValue(Monitors.Active, "Brillo", i * 3); await Task.Delay(30); }
+                    for (int i = 0; i < 30; i++) { osd.ShowValue(Monitors.Active, "Brightness", i * 3); await Task.Delay(30); }
                     osd.Hide();
-                    Row(sb, p, "30 indicadores en pantalla", true);
+                    Row(sb, p, "30 on-screen indicators", true);
                 }
 
                 sb.AppendLine();
-                foreach (var what in new[] { "el panel de la bandeja", "la ventana principal" })
+                foreach (var what in new[] { "the tray panel", "the main window" })
                 {
                     p.Refresh();
                     double cpu0 = p.TotalProcessorTime.TotalMilliseconds;
                     var sw = Stopwatch.StartNew();
                     for (int i = 0; i < 10; i++)
                     {
-                        if (what.StartsWith("el panel")) { flyout.ShowNearTray(); flyout.Update(); flyout.Hide(); }
+                        if (what.StartsWith("the tray")) { flyout.ShowNearTray(); flyout.Update(); flyout.Hide(); }
                         else { ShowMain(); main.Update(); main.HideToTray(); }
                     }
                     double wall = sw.Elapsed.TotalMilliseconds;
                     p.Refresh();
-                    sb.AppendLine(string.Format("Abrir {0}: {1:0} ms de reloj y {2:0} ms de CPU (media de 10)", what, wall / 10, (p.TotalProcessorTime.TotalMilliseconds - cpu0) / 10));
+                    sb.AppendLine(string.Format("Open {0}: {1:0} ms wall clock and {2:0} ms CPU (mean of 10)", what, wall / 10, (p.TotalProcessorTime.TotalMilliseconds - cpu0) / 10));
                 }
                 await Until(() => Monitors.DdcIdle, 30000);
                 sb.AppendLine();
                 await Task.Delay(30000);
-                Row(sb, p, "30 s en reposo al final", false);
-                Row(sb, p, "  idem tras recolectar basura", true);
+                Row(sb, p, "30 s idle at the end", false);
+                Row(sb, p, "  same after garbage collection", true);
             }
             catch (Exception ex) { sb.AppendLine(ex.ToString()); }
             File.WriteAllText(file, sb.ToString(), Encoding.UTF8);

@@ -1,6 +1,6 @@
 @echo off
-rem Pruebas de consola: modelo, servicios (con monitores simulados) y, salvo --no-ddc, una escritura inocua en el XG2705.
-rem Uso: test.cmd [--no-ddc]
+rem Console tests: model, services (against simulated monitors) and, unless --no-ddc, one harmless write on the XG2705.
+rem Usage: test.cmd [--no-ddc]
 setlocal
 cd /d "%~dp0"
 set "CSC=%WINDIR%\Microsoft.NET\Framework64\v4.0.30319\csc.exe"

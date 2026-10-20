@@ -13,7 +13,7 @@ namespace MonitorConfig
             Mute = 0x8D, HFreq = 0xAC, VFreq = 0xAE, DisplayTech = 0xB6, Controller = 0xC8, Firmware = 0xC9,
             Osd = 0xCA, OsdLanguage = 0xCC, Power = 0xD6, DisplayMode = 0xDC, Version = 0xDF;
 
-        public const byte PresetUser1 = 0x0B, MuteOn = 0x01, MuteOff = 0x02, OsdOff = 0x01, OsdOn = 0x02,
+        public const byte PresetSrgb = 0x01, PresetUser1 = 0x0B, MuteOn = 0x01, MuteOff = 0x02, OsdOff = 0x01, OsdOn = 0x02,
             PowerOn = 0x01, PowerOffDpm = 0x04, PowerOffButton = 0x05;
 
         // Codes a profile can store, in the order they are applied (preset before RGB gains).

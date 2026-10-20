@@ -172,7 +172,7 @@ namespace MonitorConfig
                         result[name.viewGdiDeviceName] = paths[i].targetInfo.outputTechnology;
                 }
             }
-            catch (Exception ex) { Crash.Log(ex); }   // optional data: «Este PC» is just not shown
+            catch (Exception ex) { Crash.Log(ex); }   // optional data: "This PC" is just not shown
             return result;
         }
 

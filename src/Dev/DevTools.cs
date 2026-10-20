@@ -26,6 +26,34 @@ namespace MonitorConfig
             return args.Contains("--shots") || args.Contains("--bench");
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        static extern bool PrintWindow(IntPtr hwnd, IntPtr hdc, uint flags);
+
+        // What DWM composes (dark title bar, themed scrollbars), after a full repaint. Windows it does not compose
+        // (the dialogs, placed off-screen) are drawn by WinForms instead.
+        public static void Capture(Control c, string path)
+        {
+            using (var bmp = new Bitmap(c.Width, c.Height))
+            {
+                var form = c as Form;   // the title bar is what needs DWM; borderless panels draw fine by themselves
+                bool onScreen = form != null && form.FormBorderStyle != FormBorderStyle.None && c.Visible
+                    && Screen.AllScreens.Any(s => s.Bounds.IntersectsWith(c.RectangleToScreen(c.ClientRectangle)));
+                bool ok = false;
+                if (onScreen)
+                {
+                    c.Refresh();
+                    using (var g = Graphics.FromImage(bmp))
+                    {
+                        IntPtr hdc = g.GetHdc();
+                        ok = PrintWindow(c.Handle, hdc, 2);   // PW_RENDERFULLCONTENT
+                        g.ReleaseHdc(hdc);
+                    }
+                }
+                if (!ok) c.DrawToBitmap(bmp, new Rectangle(0, 0, c.Width, c.Height));
+                bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+            }
+        }
+
         public static void Start(TrayApp app, string[] args)
         {
             string shots = Arg(args, "--shots"), bench = Arg(args, "--bench");
@@ -51,7 +79,7 @@ namespace MonitorConfig
                     var active = Monitors.Active;
                     if (active != null)
                     {
-                        var p = new Profile { Name = "Noche", Monitor = active.Key };
+                        var p = new Profile { Name = "Night", Monitor = active.Key };
                         p.Values[Vcp.Brightness] = 20;
                         p.Values[Vcp.ColorPreset] = 0x04;
                         using (var f = new ProfileForm(active, p, x => null)) Shot(f, Path.Combine(dir, "profile.png"));
@@ -65,11 +93,15 @@ namespace MonitorConfig
                     if (active != null)
                     {
                         if (osd == null) osd = new OsdForm();
-                        osd.ShowValue(active, "Perfil: Noche", 45);
+                        osd.ShowValue(active, Strings.ProfileIndicator("Night"), 45);
                         Shot(osd, Path.Combine(dir, "osd.png"));
                         osd.Hide();
                     }
-                    File.WriteAllText(Path.Combine(dir, "state.txt"), DumpState(), Encoding.UTF8);
+                    File.WriteAllText(Path.Combine(dir, "state.txt"), DumpState(), Encoding.UTF8);   // builds the tray menu
+                    menu.CreateControl();   // drawn without opening it
+                    menu.Size = menu.GetPreferredSize(Size.Empty);
+                    menu.PerformLayout();
+                    DevTools.Capture(menu, Path.Combine(dir, "traymenu.png"));
                 }
                 catch (Exception ex) { File.WriteAllText(Path.Combine(dir, "error.txt"), ex.ToString()); }
                 ExitApp();
@@ -81,11 +113,7 @@ namespace MonitorConfig
         {
             if (!f.Visible) { f.StartPosition = FormStartPosition.Manual; f.Location = new Point(-32000, -32000); f.Show(); }
             Application.DoEvents();
-            using (var bmp = new Bitmap(f.Width, f.Height))
-            {
-                f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height));
-                bmp.Save(path, System.Drawing.Imaging.ImageFormat.Png);
-            }
+            DevTools.Capture(f, path);
         }
 
         static void DumpMenu(StringBuilder sb, ToolStripItemCollection items, string indent)
@@ -93,7 +121,7 @@ namespace MonitorConfig
             foreach (ToolStripItem item in items)
             {
                 var mi = item as ToolStripMenuItem;
-                sb.AppendLine(indent + (mi == null ? "----" : item.Text + (mi.Checked ? "  [x]" : "") + (item.Enabled ? "" : "  (gris)")));
+                sb.AppendLine(indent + (mi == null ? "----" : item.Text + (mi.Checked ? "  [x]" : "") + (item.Enabled ? "" : "  (disabled)")));
                 if (mi != null) DumpMenu(sb, mi.DropDownItems, indent + "    ");
             }
         }
@@ -124,11 +152,7 @@ namespace MonitorConfig
             {
                 tabs.SelectedIndex = i;
                 Application.DoEvents();
-                using (var bmp = new Bitmap(Width, Height))
-                {
-                    DrawToBitmap(bmp, new Rectangle(0, 0, Width, Height));
-                    bmp.Save(Path.Combine(dir, "tab" + i + ".png"), System.Drawing.Imaging.ImageFormat.Png);
-                }
+                DevTools.Capture(this, Path.Combine(dir, "tab" + i + ".png"));
             }
             tabs.SelectedIndex = 0;
             var list = languageButton.DropDown;   // drawn without opening it
